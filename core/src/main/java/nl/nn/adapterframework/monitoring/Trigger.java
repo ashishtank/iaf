@@ -16,6 +16,7 @@
 package nl.nn.adapterframework.monitoring;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -30,7 +31,6 @@ import lombok.Setter;
 import nl.nn.adapterframework.core.Adapter;
 import nl.nn.adapterframework.monitoring.events.FireMonitorEvent;
 import nl.nn.adapterframework.util.DateUtils;
-import nl.nn.adapterframework.util.EnumUtils;
 import nl.nn.adapterframework.util.LogUtil;
 import nl.nn.adapterframework.util.XmlBuilder;
 
@@ -47,13 +47,9 @@ public class Trigger implements ITrigger {
 	private static final String CLASS_NAME_ALARM = Alarm.class.getName();
 	private static final String CLASS_NAME_CLEARING = Clearing.class.getName();
 
-	public static final int SOURCE_FILTERING_NONE=0;
-	public static final int SOURCE_FILTERING_BY_ADAPTER=1;
-	public static final int SOURCE_FILTERING_BY_LOWER_LEVEL_OBJECT=2;
-
 	private Monitor monitor;
-	private SeverityEnum severity;
-	private SourceFiltering sourceFiltering = SourceFiltering.NONE;
+	private @Getter @Setter Severity severity;
+	private @Getter @Setter SourceFiltering sourceFiltering = SourceFiltering.NONE;
 	private @Getter @Setter TriggerType triggerType = TriggerType.ALARM;
 
 	private List<String> eventCodes = new ArrayList<>();
@@ -119,10 +115,10 @@ public class Trigger implements ITrigger {
 			cleanUpEvents(now);
 			eventDates.add(now);
 			if (eventDates.size() >= getThreshold()) {
-				getMonitor().changeState(now, alarm, getSeverityEnum(), source, eventCode, null);
+				getMonitor().changeState(now, alarm, getSeverity(), source, eventCode, null);
 			}
 		} else {
-			getMonitor().changeState(now, alarm, getSeverityEnum(), source, eventCode, null);
+			getMonitor().changeState(now, alarm, getSeverity(), source, eventCode, null);
 		}
 	}
 
@@ -151,7 +147,7 @@ public class Trigger implements ITrigger {
 		trigger.addAttribute("className", isAlarm() ? CLASS_NAME_ALARM : CLASS_NAME_CLEARING);
 		monitor.addSubElement(trigger);
 		if (getSeverity()!=null) {
-			trigger.addAttribute("severity",getSeverity());
+			trigger.addAttribute("severity", getSeverity().name());
 		}
 		if (getThreshold()>0) {
 			trigger.addAttribute("threshold",getThreshold());
@@ -164,22 +160,20 @@ public class Trigger implements ITrigger {
 			trigger.addSubElement(event);
 			event.setValue(eventCodes.get(i));
 		}
-		if (getAdapterFilters()!=null) {
-			if (getSourceFilteringEnum() != SourceFiltering.NONE) {
-				for (Iterator<String> it=getAdapterFilters().keySet().iterator(); it.hasNext(); ) {
-					String adapterName = it.next();
-					AdapterFilter af = getAdapterFilters().get(adapterName);
-					XmlBuilder adapter = new XmlBuilder("adapterfilter");
-					trigger.addSubElement(adapter);
-					adapter.addAttribute("adapter",adapterName);
-					if (isFilterOnLowerLevelObjects()) {
-						List<String> subobjectList=af.getSubObjectList();
-						if (subobjectList!=null) {
-							for(String subObjectName : subobjectList) {
-								XmlBuilder sourceXml=new XmlBuilder("source");
-								adapter.addSubElement(sourceXml);
-								sourceXml.setValue(subObjectName);
-							}
+		if (getAdapterFilters()!=null && getSourceFiltering() != SourceFiltering.NONE) {
+			for (Iterator<String> it=getAdapterFilters().keySet().iterator(); it.hasNext(); ) {
+				String adapterName = it.next();
+				AdapterFilter af = getAdapterFilters().get(adapterName);
+				XmlBuilder adapter = new XmlBuilder("adapterfilter");
+				trigger.addSubElement(adapter);
+				adapter.addAttribute("adapter",adapterName);
+				if (isFilterOnLowerLevelObjects()) {
+					List<String> subobjectList=af.getSubObjectList();
+					if (subobjectList!=null) {
+						for(String subObjectName : subobjectList) {
+							XmlBuilder sourceXml=new XmlBuilder("source");
+							adapter.addSubElement(sourceXml);
+							sourceXml.setValue(subObjectName);
 						}
 					}
 				}
@@ -213,39 +207,14 @@ public class Trigger implements ITrigger {
 	}
 
 	@Override
-	public void setEventCodes(String[] arr) {
+	public void setEventCodes(List<String> events) {
 		clearEventCodes();
-		for (int i=0;i<arr.length;i++) {
-			addEventCode(arr[i]);
-		}
+		eventCodes.addAll(events);
 	}
 
 	@Override
-	public String[] getEventCodes() {
-		return eventCodes.toArray(new String[eventCodes.size()]);
-	}
-
-	public List<String> getEventCodeList() {
-		return eventCodes;
-	}
-
-	public void setSeverity(String severity) {
-		setSeverityEnum(EnumUtils.parse(SeverityEnum.class, severity));
-	}
-
-	@Override
-	public void setSeverityEnum(SeverityEnum enumeration) {
-		severity = enumeration;
-	}
-
-	@Override
-	public SeverityEnum getSeverityEnum() {
-		return severity;
-	}
-
-	@Override
-	public String getSeverity() {
-		return severity==null?null:severity.name();
+	public List<String> getEventCodes() {
+		return Collections.unmodifiableList(eventCodes);
 	}
 
 	@Override
@@ -266,16 +235,16 @@ public class Trigger implements ITrigger {
 	@Override
 	public void clearAdapterFilters() {
 		adapterFilters.clear();
-		setSourceFilteringEnum(SourceFiltering.NONE);
+		setSourceFiltering(SourceFiltering.NONE);
 	}
 
 	@Override
 	public void registerAdapterFilter(AdapterFilter af) {
 		adapterFilters.put(af.getAdapter(),af);
 		if(af.isFilteringToLowerLevelObjects()) {
-			setSourceFilteringEnum(SourceFiltering.SOURCE);
-		} else if (getSourceFilteringEnum() == SourceFiltering.NONE) {
-			setSourceFilteringEnum(SourceFiltering.ADAPTER);
+			setSourceFiltering(SourceFiltering.SOURCE);
+		} else if (getSourceFiltering() == SourceFiltering.NONE) {
+			setSourceFiltering(SourceFiltering.ADAPTER);
 		}
 	}
 
@@ -284,21 +253,6 @@ public class Trigger implements ITrigger {
 	}
 	public boolean isFilterOnAdapters() {
 		return sourceFiltering == SourceFiltering.ADAPTER;
-	}
-
-	@Override
-	public void setSourceFilteringEnum(SourceFiltering filtering) {
-		this.sourceFiltering = filtering;
-	}
-
-	@Override
-	public String getSourceFiltering() {
-		return sourceFiltering.name().toLowerCase();
-	}
-
-	@Override
-	public SourceFiltering getSourceFilteringEnum() {
-		return sourceFiltering;
 	}
 
 	@Override

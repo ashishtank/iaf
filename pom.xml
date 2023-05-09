@@ -11,16 +11,16 @@
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<log4j2.version>2.20.0</log4j2.version>
 
-		<jackson.version>2.14.2</jackson.version>
+		<jackson.version>2.15.0</jackson.version>
 		<cxf.version>3.5.5</cxf.version>
-		<spring.version>5.3.26</spring.version>
-		<spring-security.version>5.8.2</spring-security.version>
+		<spring.version>5.3.27</spring.version>
+		<spring-security.version>5.8.3</spring-security.version>
 		<spring-integration.version>5.5.17</spring-integration.version>
 
 		<btm.version>3.0.0-mk1</btm.version>
 		<narayana.version>5.12.7.Final</narayana.version>
 		<jboss-logging.version>3.4.2.Final</jboss-logging.version>
-		<micrometer.version>1.10.5</micrometer.version>
+		<micrometer.version>1.10.6</micrometer.version>
 		<argLine /> <!-- add empty default argLine so Surefire won't fail when JaCoCo isn't present -->
 		<!-- property [iaf.rootdir] is available to get the root of the project, because of the [directory-maven-plugin] -->
 		<frankdoc.version>1.2-SNAPSHOT</frankdoc.version>
@@ -31,10 +31,10 @@
 		<oracle.driver.version>18.3.0.0</oracle.driver.version>
 		<oracle.driver.jdkversion>8</oracle.driver.jdkversion>
 		<mssql.driver.version>7.4.1.jre8</mssql.driver.version>
-		<mysql.driver.version>8.0.32</mysql.driver.version>
+		<mysql.driver.version>8.0.33</mysql.driver.version>
 		<mariadb.driver.version>2.7.9</mariadb.driver.version>
 		<postgresql.driver.version>42.6.0</postgresql.driver.version>
-		<mongodb.driver.version>4.9.0</mongodb.driver.version>
+		<mongodb.driver.version>4.9.1</mongodb.driver.version>
 
 		<!-- Other versions for building Docker images and running IAF-Test -->
 		<activemq.driver.version>5.16.6</activemq.driver.version> <!-- appears to be the last java 8 compatible release -->
@@ -96,6 +96,11 @@
 			</dependency>
 			<dependency>
 				<groupId>org.ibissource</groupId>
+				<artifactId>iaf-management-gateway</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.ibissource</groupId>
 				<artifactId>ibis-adapterframework-core</artifactId>
 				<version>${project.version}</version>
 			</dependency>
@@ -147,6 +152,17 @@
 			<dependency>
 				<groupId>org.ibissource</groupId>
 				<artifactId>ibis-adapterframework-console</artifactId>
+				<version>${project.version}</version>
+				<type>pom</type>
+			</dependency>
+			<dependency>
+				<groupId>org.ibissource</groupId>
+				<artifactId>ibis-adapterframework-console-frontend</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.ibissource</groupId>
+				<artifactId>ibis-adapterframework-console-backend</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>
@@ -244,6 +260,96 @@
 				<groupId>org.slf4j</groupId>
 				<artifactId>slf4j-jcl</artifactId>
 				<version>1.7.36</version>
+			</dependency>
+
+			<!-- SPRING to force versions -->
+			<dependency>
+				<groupId>org.springframework</groupId>
+				<artifactId>spring-beans</artifactId>
+				<version>${spring.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework</groupId>
+				<artifactId>spring-context</artifactId>
+				<version>${spring.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework</groupId>
+				<artifactId>spring-context-support</artifactId>
+				<version>${spring.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework</groupId>
+				<artifactId>spring-core</artifactId>
+				<version>${spring.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework</groupId>
+				<artifactId>spring-jdbc</artifactId>
+				<version>${spring.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework</groupId>
+				<artifactId>spring-jms</artifactId>
+				<version>${spring.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework</groupId>
+				<artifactId>spring-test</artifactId>
+				<version>${spring.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework</groupId>
+				<artifactId>spring-tx</artifactId>
+				<version>${spring.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework</groupId>
+				<artifactId>spring-web</artifactId>
+				<version>${spring.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework</groupId>
+				<artifactId>spring-aop</artifactId>
+				<version>${spring.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework</groupId>
+				<artifactId>spring-expression</artifactId>
+				<version>${spring.version}</version>
+			</dependency>
+
+			<dependency>
+				<groupId>org.springframework.integration</groupId>
+				<artifactId>spring-integration-core</artifactId>
+				<version>${spring-integration.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework.integration</groupId>
+				<artifactId>spring-integration-security</artifactId>
+				<version>${spring-integration.version}</version>
+			</dependency>
+
+			<!-- explicitly define Spring dependencies, to avoid version conflicts with Spring Security (https://www.baeldung.com/spring-security-with-maven) -->
+			<dependency>
+				<groupId>org.springframework.security</groupId>
+				<artifactId>spring-security-core</artifactId>
+				<version>${spring-security.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework.security</groupId>
+				<artifactId>spring-security-web</artifactId>
+				<version>${spring-security.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework.security</groupId>
+				<artifactId>spring-security-config</artifactId>
+				<version>${spring-security.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework.security</groupId>
+				<artifactId>spring-security-ldap</artifactId>
+				<version>${spring-security.version}</version>
 			</dependency>
 
 			<!-- Jackson dependencies -->
@@ -351,6 +457,12 @@
 				<scope>test</scope>
 			</dependency>
 			<dependency>
+				<groupId>org.junit.jupiter</groupId>
+				<artifactId>junit-jupiter-params</artifactId>
+				<version>[5.9.1,)</version>
+				<scope>test</scope>
+			</dependency>
+			<dependency>
 				<groupId>org.mockito</groupId>
 				<artifactId>mockito-core</artifactId>
 				<version>4.11.0</version>
@@ -394,6 +506,10 @@
 			<plugin>
 				<groupId>org.glassfish.copyright</groupId>
 				<artifactId>glassfish-copyright-maven-plugin</artifactId>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-checkstyle-plugin</artifactId>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
@@ -560,7 +676,7 @@
 				<plugin>
 					<groupId>org.jacoco</groupId>
 					<artifactId>jacoco-maven-plugin</artifactId>
-					<version>0.8.9</version>
+					<version>0.8.10</version>
 					<executions>
 						<execution>
 							<id>prepare-jacoco</id>
@@ -646,7 +762,7 @@
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-checkstyle-plugin</artifactId>
-					<version>3.2.1</version>
+					<version>3.2.2</version>
 					<configuration>
 						<configLocation>${iaf.rootdir}/checkstyle.xml</configLocation>
 						<propertyExpansion>config_loc=${iaf.rootdir}</propertyExpansion>
@@ -848,7 +964,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-project-info-reports-plugin</artifactId>
-				<version>3.4.2</version>
+				<version>3.4.3</version>
 			</plugin>
 			<!--
 				http://maven.apache.org/plugins/maven-javadoc-plugin/usage.html
@@ -967,10 +1083,10 @@
 			</activation>
 			<modules>
 				<module>iaf-commons</module>
+				<module>management-gateway</module>
 				<module>core</module>
 				<module>console</module>
 				<module>webapp</module>
-				<module>ear</module>
 				<module>larva</module>
 				<module>ladybug</module>
 				<module>test</module>

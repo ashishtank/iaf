@@ -16,6 +16,7 @@
 
 package nl.nn.adapterframework.monitoring;
 
+import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.DisposableBean;
@@ -39,16 +40,14 @@ public interface ITrigger extends LazyLoadingEventListener<FireMonitorEvent>, Di
 	void setMonitor(Monitor monitor);
 	void toXml(XmlBuilder monitor);
 
-	void setSourceFilteringEnum(SourceFiltering filtering);
-	SourceFiltering getSourceFilteringEnum();
-	String getSourceFiltering();
+	void setSourceFiltering(SourceFiltering filtering);
+	SourceFiltering getSourceFiltering();
 
-	void setEventCodes(String[] arr);
-	String[] getEventCodes();
+	void setEventCodes(List<String> events);
+	List<String> getEventCodes();
 
-	void setSeverityEnum(SeverityEnum enumeration);
-	String getSeverity();
-	SeverityEnum getSeverityEnum();
+	void setSeverity(Severity severity);
+	Severity getSeverity();
 
 	void setThreshold(int i);
 	int getThreshold();
