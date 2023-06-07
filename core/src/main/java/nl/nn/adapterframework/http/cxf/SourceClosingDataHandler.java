@@ -1,5 +1,5 @@
 /*
-   Copyright 2013 Nationale-Nederlanden
+   Copyright 2023 WeAreFrank!
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -13,17 +13,27 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 */
-package nl.nn.adapterframework.monitoring;
+package nl.nn.adapterframework.http.cxf;
 
-/**
- * Interface exposed to objects to be monitored, to throw their events to; To be implemented by code that handles event.
- *  
- * @author  Gerrit van Brakel
- * @since   4.9
- */
-public interface EventHandler {
+import java.io.Closeable;
+import java.io.IOException;
+import java.io.OutputStream;
 
-	public void registerEvent(EventThrowing source, String eventCode);
-	public void fireEvent(EventThrowing source, String eventCode);
+import javax.activation.DataHandler;
+import javax.activation.DataSource;
 
+public class SourceClosingDataHandler extends DataHandler {
+
+	public SourceClosingDataHandler(DataSource ds) {
+		super(ds);
+	}
+
+	@Override
+	public void writeTo(OutputStream os) throws IOException {
+		super.writeTo(os);
+
+		if(getDataSource() instanceof Closeable) {
+			((Closeable)getDataSource()).close();
+		}
+	}
 }
