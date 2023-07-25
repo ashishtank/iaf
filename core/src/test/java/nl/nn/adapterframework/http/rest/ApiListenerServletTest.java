@@ -1,5 +1,5 @@
 /*
-Copyright 2019 Nationale-Nederlanden
+Copyright 2019 Nationale-Nederlanden, 2020-2023 WeAreFrank!
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -98,6 +98,7 @@ import nl.nn.adapterframework.http.HttpMessageEntity;
 import nl.nn.adapterframework.http.mime.MultipartEntityBuilder;
 import nl.nn.adapterframework.http.rest.ApiListener.AuthenticationMethods;
 import nl.nn.adapterframework.http.rest.ApiListener.HttpMethod;
+import nl.nn.adapterframework.receivers.RawMessageWrapper;
 import nl.nn.adapterframework.stream.Message;
 import nl.nn.adapterframework.stream.MessageContext;
 import nl.nn.adapterframework.stream.UrlMessage;
@@ -1135,10 +1136,10 @@ public class ApiListenerServletTest extends Mockito {
 
 		// Assert
 		assertEquals(200, result.getStatus());
-		assertTrue(session.containsKey(PipeLineSession.messageIdKey));
-		assertEquals("msg1", session.get(PipeLineSession.messageIdKey));
-		assertTrue(session.containsKey(PipeLineSession.correlationIdKey));
-		assertEquals("msg1", session.get(PipeLineSession.correlationIdKey));
+		assertTrue(session.containsKey(PipeLineSession.MESSAGE_ID_KEY));
+		assertEquals("msg1", session.get(PipeLineSession.MESSAGE_ID_KEY));
+		assertTrue(session.containsKey(PipeLineSession.CORRELATION_ID_KEY));
+		assertEquals("msg1", session.get(PipeLineSession.CORRELATION_ID_KEY));
 		assertNull(result.getErrorMessage());
 	}
 
@@ -1161,10 +1162,10 @@ public class ApiListenerServletTest extends Mockito {
 
 		// Assert
 		assertEquals(200, result.getStatus());
-		assertTrue(session.containsKey(PipeLineSession.messageIdKey));
-		assertEquals("msg1", session.get(PipeLineSession.messageIdKey));
-		assertTrue(session.containsKey(PipeLineSession.correlationIdKey));
-		assertEquals("msg2", session.get(PipeLineSession.correlationIdKey));
+		assertTrue(session.containsKey(PipeLineSession.MESSAGE_ID_KEY));
+		assertEquals("msg1", session.get(PipeLineSession.MESSAGE_ID_KEY));
+		assertTrue(session.containsKey(PipeLineSession.CORRELATION_ID_KEY));
+		assertEquals("msg2", session.get(PipeLineSession.CORRELATION_ID_KEY));
 		assertNull(result.getErrorMessage());
 	}
 
@@ -1308,6 +1309,24 @@ public class ApiListenerServletTest extends Mockito {
 		assertFalse(handlerInvoked, "Request Handler should not have been invoked, pre-conditions should have failed and stopped request-processing");
 		assertEquals(401, result.getStatus());
 		assertEquals("illegal issuer [JWTPipeTest], must be [test]", result.getErrorMessage());
+	}
+
+	@Test
+	public void testJwtTokenParsingWithJwtHeader() throws Exception {
+		final String JWT_HEADER = "X-JWT-Assertion";
+		new ApiListenerBuilder(JWT_VALIDATION_URI, Methods.GET)
+				.setJwksURL(TestFileUtils.getTestFileURL("/JWT/jwks.json").toString())
+				.setRequiredIssuer("JWTPipeTest")
+				.setAuthenticationMethod(AuthenticationMethods.JWT)
+				.setJwtHeader(JWT_HEADER)
+				.build();
+
+		Response result = service(prepareJWTRequest(null, JWT_HEADER));
+
+		assertEquals(200, result.getStatus());
+		assertEquals(PAYLOAD, session.get("ClaimsSet"));
+		assertTrue(result.containsHeader("Allow"));
+		assertNull(result.getErrorMessage());
 	}
 
 	@Test
@@ -1476,12 +1495,14 @@ public class ApiListenerServletTest extends Mockito {
 	}
 
 	public MockHttpServletRequest prepareJWTRequest(String token) throws Exception {
-		Map<String, String> headers = new HashMap<String, String>();
-		headers.put("Authorization", "Bearer "+ (token != null ? token : createJWT()) );
+		return prepareJWTRequest(token, "Authorization");
+	}
+	public MockHttpServletRequest prepareJWTRequest(String token, String header) throws Exception {
+		Map<String, String> headers = new HashMap();
+		headers.put(header, "Bearer "+ (token != null ? token : createJWT()) );
 
 		return createRequest(JWT_VALIDATION_URI, Methods.GET, null, headers);
 	}
-
 	private static class StricterMockHttpServletResponse extends MockHttpServletResponse {
 		private static Logger log = LogUtil.getLogger(StricterMockHttpServletResponse.class);
 		boolean responseAccessed = false;
@@ -1713,6 +1734,10 @@ public class ApiListenerServletTest extends Mockito {
 			listener.setCorrelationIdHeader(headerName);
 			return this;
 		}
+		public ApiListenerBuilder setJwtHeader(String headerName) {
+			listener.setJwtHeader(headerName);
+			return this;
+		}
 
 		public ApiListenerBuilder withExitCode(int exitCode) {
 			handler.setExitCode(exitCode);
@@ -1746,18 +1771,18 @@ public class ApiListenerServletTest extends Mockito {
 		private @Setter Object responseContent = null;
 
 		@Override
-		public void processRawMessage(IListener<Message> origin, Message message, PipeLineSession session, boolean duplicatesAlreadyChecked) throws ListenerException {
+		public void processRawMessage(IListener<Message> origin, RawMessageWrapper<Message> message, PipeLineSession session, boolean duplicatesAlreadyChecked) throws ListenerException {
 			fail("method should not be called");
 		}
 
 		@Override
-		public void processRawMessage(IListener<Message> origin, Message message, PipeLineSession session, long waitingTime, boolean duplicatesAlreadyChecked) throws ListenerException {
+		public void processRawMessage(IListener<Message> origin, RawMessageWrapper<Message> message, PipeLineSession session, long waitingTime, boolean duplicatesAlreadyChecked) throws ListenerException {
 			fail("method should not be called");
 		}
 
 
 		@Override
-		public Message processRequest(IListener<Message> origin, Message rawMessage, Message message, PipeLineSession context) throws ListenerException {
+		public Message processRequest(IListener<Message> origin, RawMessageWrapper<Message> rawMessage, Message message, PipeLineSession context) throws ListenerException {
 			handlerInvoked = true;
 			if(session != null) {
 				context.putAll(session);

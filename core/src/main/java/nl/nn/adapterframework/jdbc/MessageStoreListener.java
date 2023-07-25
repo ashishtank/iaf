@@ -16,10 +16,10 @@
 package nl.nn.adapterframework.jdbc;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.StringTokenizer;
+
+import javax.annotation.Nonnull;
 
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
@@ -34,6 +34,7 @@ import nl.nn.adapterframework.core.ProcessState;
 import nl.nn.adapterframework.doc.Default;
 import nl.nn.adapterframework.doc.Optional;
 import nl.nn.adapterframework.receivers.MessageWrapper;
+import nl.nn.adapterframework.receivers.RawMessageWrapper;
 import nl.nn.adapterframework.stream.Message;
 import nl.nn.adapterframework.util.StringUtil;
 
@@ -71,7 +72,7 @@ import nl.nn.adapterframework.util.StringUtil;
  * a <code>JdbcErrorStorage</code> or <code>JdbcMessageLog</code> within the same receiver.
  * <br/><br/>
  * See /IAF_util/IAF_DatabaseChangelog.xml for the structure of table IBISSTORE.
- * 
+ *
  * @author Jaco de Groot
  */
 public class MessageStoreListener<M> extends JdbcTableListener<M> {
@@ -129,25 +130,21 @@ public class MessageStoreListener<M> extends JdbcTableListener<M> {
 
 	public void extractSessionKeyList() {
 		if (sessionKeys != null) {
-			sessionKeysList = new ArrayList<>();
-			StringTokenizer stringTokenizer = new StringTokenizer(sessionKeys, ",");
-			while (stringTokenizer.hasMoreElements()) {
-				sessionKeysList.add(stringTokenizer.nextToken());
-			}
+			sessionKeysList = StringUtil.split(sessionKeys);
 		}
 	}
 
 	@Override
-	public Message extractMessage(M rawMessage, Map<String, Object> threadContext) throws ListenerException {
-		if (rawMessage != null && sessionKeys != null) {
-			return convertToMessage(rawMessage, threadContext);
+	public Message extractMessage(@Nonnull RawMessageWrapper<M> rawMessage, @Nonnull Map<String, Object> context) throws ListenerException {
+		if (sessionKeys != null) {
+			return convertToMessage(rawMessage, context);
 		}
-		return super.extractMessage(rawMessage, threadContext);
+		return super.extractMessage(rawMessage, context);
 	}
 
-	public Message convertToMessage(Object rawMessageOrWrapper, Map<String, Object> threadContext) throws ListenerException {
+	private Message convertToMessage(@Nonnull RawMessageWrapper<M> rawMessageWrapper, Map<String, Object> threadContext) throws ListenerException {
 		Message message;
-		String messageData = extractStringData(rawMessageOrWrapper);
+		String messageData = extractStringData(rawMessageWrapper);
 		try(CSVParser parser = CSVParser.parse(messageData, CSVFormat.DEFAULT)) {
 			CSVRecord csvRecord = parser.getRecords().get(0);
 			message = new Message(csvRecord.get(0));
@@ -162,17 +159,15 @@ public class MessageStoreListener<M> extends JdbcTableListener<M> {
 		return message;
 	}
 
-	private static String extractStringData(Object rawMessageOrWrapper) throws ListenerException {
-		if (rawMessageOrWrapper == null) {
-			throw new ListenerException("Raw message data is null");
-		} else if (rawMessageOrWrapper instanceof MessageWrapper) {
+	private static String extractStringData(@Nonnull RawMessageWrapper<?> rawMessageWrapper) throws ListenerException {
+		if (rawMessageWrapper instanceof MessageWrapper) {
 			try {
-				return ((MessageWrapper<?>) rawMessageOrWrapper).getMessage().asString();
+				return ((MessageWrapper<?>) rawMessageWrapper).getMessage().asString();
 			} catch (IOException e) {
 				throw new ListenerException("Exception extracting string data from message", e);
 			}
 		} else {
-			return rawMessageOrWrapper.toString();
+			return rawMessageWrapper.getRawMessage().toString();
 		}
 	}
 

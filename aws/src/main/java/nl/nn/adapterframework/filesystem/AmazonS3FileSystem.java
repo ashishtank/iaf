@@ -40,14 +40,18 @@ import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import com.amazonaws.services.s3.Headers;
 import com.amazonaws.services.s3.internal.BucketNameUtils;
+import com.amazonaws.services.s3.model.CopyObjectRequest;
 import com.amazonaws.services.s3.model.DeleteObjectRequest;
 import com.amazonaws.services.s3.model.ListObjectsV2Request;
 import com.amazonaws.services.s3.model.ListObjectsV2Result;
 import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
+import com.amazonaws.services.s3.model.StorageClass;
 
 import lombok.Getter;
 import nl.nn.adapterframework.aws.AwsUtil;
@@ -89,6 +93,9 @@ public class AmazonS3FileSystem extends FileSystemBase<S3Object> implements IWri
 
 	private @Getter String proxyHost = null;
 	private @Getter Integer proxyPort = null;
+	private @Getter int maxConnections = 50;
+
+	private @Getter StorageClass storageClass = StorageClass.Standard;
 
 	private AmazonS3 s3Client;
 	private AWSCredentialsProvider credentialProvider;
@@ -133,7 +140,7 @@ public class AmazonS3FileSystem extends FileSystemBase<S3Object> implements IWri
 				.withChunkedEncodingDisabled(isChunkedEncodingDisabled())
 				.withForceGlobalBucketAccessEnabled(isForceGlobalBucketAccessEnabled())
 				.withCredentials(credentialProvider)
-				.withClientConfiguration(this.getProxyConfig())
+				.withClientConfiguration(this.getClientConfig())
 				.enablePathStyleAccess();
 
 		if(StringUtils.isBlank(serviceEndpoint)) {
@@ -156,11 +163,10 @@ public class AmazonS3FileSystem extends FileSystemBase<S3Object> implements IWri
 	/**
 	 * Creates a local S3Object pointer, not representative with what is stored in the S3 Bucket.
 	 * This method may be used to upload a file to S3.
-	 * See {@link #resolve(S3Object) resolve}.
 	 */
 	@Override
 	public S3Object toFile(String filename) throws FileSystemException {
-		S3Object object = new LocalS3Object();
+		S3Object object = new S3Object();
 		int separatorPos = filename.indexOf(BUCKET_OBJECT_SEPARATOR);
 		if (separatorPos<0) {
 			object.setBucketName(bucketName);
@@ -235,7 +241,7 @@ public class AmazonS3FileSystem extends FileSystemBase<S3Object> implements IWri
 	}
 
 	private static S3Object extractS3ObjectFromSummary(S3ObjectSummary summary) {
-		S3Object object = new LocalS3Object();
+		S3Object object = new S3Object();
 		ObjectMetadata metadata = new ObjectMetadata();
 		metadata.setContentLength(summary.getSize());
 		metadata.setLastModified(summary.getLastModified());
@@ -265,7 +271,11 @@ public class AmazonS3FileSystem extends FileSystemBase<S3Object> implements IWri
 						ObjectMetadata metaData = new ObjectMetadata();
 						metaData.setContentLength(file.length());
 
-						s3Client.putObject(bucketName, f.getKey(), fis, metaData);
+						try(S3Object file = f) {
+							PutObjectRequest por = new PutObjectRequest(bucketName, file.getKey(), fis, metaData);
+							por.setStorageClass(getStorageClass());
+							s3Client.putObject(por);
+						}
 					} finally {
 						isClosed = true;
 						Files.delete(file.toPath());
@@ -281,42 +291,33 @@ public class AmazonS3FileSystem extends FileSystemBase<S3Object> implements IWri
 		return null;
 	}
 
+	/** 
+	 * If you retrieve an S3Object, you should close this input stream as soon as possible,
+	 * because the object contents aren't buffered in memory and stream directly from Amazon S3.
+	 * Further, failure to close this stream can cause the request pool to become blocked. 
+	 */
 	@Override
-	public Message readFile(S3Object f, String charset) throws FileSystemException, IOException {
+	public Message readFile(S3Object file, String charset) throws FileSystemException, IOException {
 		try {
-			S3Object file = resolve(f);
-			return new S3Message(file, FileSystemUtils.getContext(this, file, charset));
+			if(file.getObjectContent() == null) { // We have a reference but not an actual object representing the S3 bucket.
+				file = s3Client.getObject(bucketName, file.getKey()); // Fetch a new copy
+			}
+			return new Message(file.getObjectContent(), FileSystemUtils.getContext(this, file, charset));
 		} catch (AmazonServiceException e) {
 			throw new FileSystemException(e);
 		}
 	}
 
 	/**
-	 * Attempts to resolve the Local S3 Pointer created by the {@link #toFile(String) toFile} method.
-	 * Or returns directly when the provided S3Object is an actual representation of the S3 bucket
+	 * Attempts to update the Local S3 Pointer created by the {@link #toFile(String) toFile} method.
+	 * Updates the Metadata context but does not retrieve the actual file handle.
 	 */
-	private S3Object resolve(S3Object f) {
-		if(f instanceof LocalS3Object) {
-			return s3Client.getObject(bucketName, f.getKey());
+	private S3Object updateFileAttributes(S3Object f) {
+		if(f.getObjectMetadata().getRawMetadataValue(Headers.CONTENT_LENGTH) == null) {
+			ObjectMetadata omd = s3Client.getObjectMetadata(bucketName, f.getKey());
+			f.setObjectMetadata(omd);
 		}
 		return f;
-	}
-
-	/** Local S3 Pointer for files that are not yet resolved. */
-	private static class LocalS3Object extends S3Object {
-		// no extra or overridden methods, this class purely exists to differentiate
-		// between locally created S3Objects and actual S3 representative objects.
-	}
-
-	/** 
-	 * If you retrieve an S3Object, you should close this input stream as soon as possible,
-	 * because the object contents aren't buffered in memory and stream directly from Amazon S3.
-	 * Further, failure to close this stream can cause the request pool to become blocked. 
-	 */
-	private static class S3Message extends Message {
-		public S3Message(S3Object file, Map<String,Object> context) {
-			super(file.getObjectContent(), context);
-		}
 	}
 
 	@Override
@@ -366,7 +367,9 @@ public class AmazonS3FileSystem extends FileSystemBase<S3Object> implements IWri
 	@Override
 	// rename is actually implemented via copy
 	public S3Object renameFile(S3Object source, S3Object destination) throws FileSystemException {
-		s3Client.copyObject(bucketName, source.getKey(), bucketName, destination.getKey());
+		CopyObjectRequest cor = new CopyObjectRequest(bucketName, source.getKey(), bucketName, destination.getKey());
+		cor.setStorageClass(getStorageClass());
+		s3Client.copyObject(cor);
 		s3Client.deleteObject(bucketName, source.getKey());
 		return destination;
 	}
@@ -377,7 +380,9 @@ public class AmazonS3FileSystem extends FileSystemBase<S3Object> implements IWri
 			throw new FileSystemException("folder ["+destinationFolder+"] does not exist");
 		}
 		String destinationFile = destinationFolder+"/"+getName(f);
-		s3Client.copyObject(bucketName, f.getKey(), bucketName, destinationFile);
+		CopyObjectRequest cor = new CopyObjectRequest(bucketName, f.getKey(), bucketName,destinationFile);
+		cor.setStorageClass(getStorageClass());
+		s3Client.copyObject(cor);
 		return toFile(destinationFile);
 	}
 
@@ -414,15 +419,14 @@ public class AmazonS3FileSystem extends FileSystemBase<S3Object> implements IWri
 
 	@Override
 	public long getFileSize(S3Object f) throws FileSystemException {
-		return resolve(f).getObjectMetadata().getContentLength();
+		updateFileAttributes(f);
+		return f.getObjectMetadata().getContentLength();
 	}
 
 	@Override
 	public Date getModificationTime(S3Object f) throws FileSystemException {
-		if(f.getKey().isEmpty()) {
-			return null;
-		}
-		return resolve(f).getObjectMetadata().getLastModified();
+		updateFileAttributes(f);
+		return f.getObjectMetadata().getLastModified();
 	}
 
 //	/**
@@ -544,15 +548,17 @@ public class AmazonS3FileSystem extends FileSystemBase<S3Object> implements IWri
 
 
 
-	public ClientConfiguration getProxyConfig() {
-		ClientConfiguration proxyConfig = null;
+	public ClientConfiguration getClientConfig() {
+		ClientConfiguration clientConfiguration = new ClientConfiguration();
+		clientConfiguration.setMaxConnections(getMaxConnections());
+
 		if (this.getProxyHost() != null && this.getProxyPort() != null) {
-			proxyConfig = new ClientConfiguration();
-			proxyConfig.setProtocol(Protocol.HTTPS);
-			proxyConfig.setProxyHost(this.getProxyHost());
-			proxyConfig.setProxyPort(this.getProxyPort());
+			clientConfiguration.setProtocol(Protocol.HTTPS);
+			clientConfiguration.setProxyHost(this.getProxyHost());
+			clientConfiguration.setProxyPort(this.getProxyPort());
 		}
-		return proxyConfig;
+
+		return clientConfiguration;
 	}
 
 	@Override
@@ -653,6 +659,20 @@ public class AmazonS3FileSystem extends FileSystemBase<S3Object> implements IWri
 	/** Proxy port */
 	public void setProxyPort(Integer proxyPort) {
 		this.proxyPort = proxyPort;
+	}
+
+	/**
+	 * Set the desired storage class for the S3 object when action is move,copy or write.
+	 * More info on storage classes can be found on the AWS S3 docs: https://aws.amazon.com/s3/storage-classes/
+	 * @ff.default STANDARD
+	 */
+	public void setStorageClass(StorageClass storageClass) {
+		this.storageClass = storageClass;
+	}
+
+	/** Maximum concurrent connections towards S3 */
+	public void setMaxConnections(int maxConnections) {
+		this.maxConnections = maxConnections;
 	}
 
 }

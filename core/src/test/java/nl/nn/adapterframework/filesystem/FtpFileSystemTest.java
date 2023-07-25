@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assume.assumeFalse;
 
 import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.mockftpserver.fake.FakeFtpServer;
 import org.mockftpserver.fake.UserAccount;
@@ -21,7 +22,7 @@ import nl.nn.adapterframework.ftp.FTPFileRef;
  */
 public class FtpFileSystemTest extends FileSystemTest<FTPFileRef, FtpFileSystem> {
 
-	private String username = "wearefrank";
+	private String username = "frankframework";
 	private String password = "pass_123";
 	private String host = "localhost";
 	private int port = 21;
@@ -51,9 +52,12 @@ public class FtpFileSystemTest extends FileSystemTest<FTPFileRef, FtpFileSystem>
 	}
 
 	@Override
+	@AfterEach
 	public void tearDown() throws Exception {
-		ftpServer.stop();
-		ftpServer = null;
+		if(ftpServer != null) {
+			ftpServer.stop();
+			ftpServer = null;
+		}
 
 		super.tearDown();
 	}
@@ -91,22 +95,19 @@ public class FtpFileSystemTest extends FileSystemTest<FTPFileRef, FtpFileSystem>
 
 	@Test
 	public void testFTPFileRefSetFolder() {
-		FTPFileRef ref1 = new FTPFileRef("test123");
-		ref1.setFolder("folder");
+		FTPFileRef ref1 = new FTPFileRef("test123", "folder");
 		assertEquals("folder/test123", ref1.getName());
 	}
 
 	@Test
 	public void testFTPFileRefRelativeWithSetFolder() {
-		FTPFileRef ref2 = new FTPFileRef("folder1/test123");
-		ref2.setFolder("folder2");
-		assertEquals("folder2/folder1/test123", ref2.getName());
+		FTPFileRef ref2 = new FTPFileRef("folder1/test123", "folder2");
+		assertEquals("folder2/test123", ref2.getName());
 	}
 
 	@Test
 	public void testFTPFileRefWindowsSlash() {
-		FTPFileRef ref2 = new FTPFileRef("folder1\\test123");
-		ref2.setFolder("folder2");
-		assertEquals("folder2/folder1/test123", ref2.getName());
+		FTPFileRef ref2 = new FTPFileRef("folder1\\test123", "folder2");
+		assertEquals("folder2/test123", ref2.getName());
 	}
 }
